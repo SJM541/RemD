@@ -1,8 +1,6 @@
 
 # Use SoilGrids and APIXU APIs to retrieve soil and recent weather for a location
 #
-# Meaningless change to test working with GitHub
-
 # SoilGrids: Info at https://rest.soilgrids.org/query.html
 # APIXU: info at https://www.apixu.com/doc/request.aspx
 
