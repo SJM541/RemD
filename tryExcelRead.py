@@ -8,33 +8,44 @@ import pandas as pd
 def main():
 
 
-    countryName='UK'
-    cropName = 'Cabbage'
+    targetCountry='UK'
+    targetCrop = 'Cabbage'
 
     print ('working')
 
     fileName = 'C:/Users/marshalls/Documents/SJM/RemoteDiagnostics/ContextModel/Remote_Diagnostics_Data.xlsx'
 
-    Locations = pd.read_excel(open(fileName,'rb'),sheetname='CPC_pest_location_model_data')
-    Hosts = pd.read_excel(open(fileName,'rb'),sheetname='CPC_crop-host_model_data')
+    locations = pd.read_excel(open(fileName,'rb'),sheetname='CPC_pest_location_model_data')
+    crops = pd.read_excel(open(fileName,'rb'),sheetname='CPC_crop-host_model_data')
 
-    print('Locations \n')
-    print(Locations)
-    print('\n Hosts \n')
-    print(Hosts)
+    #print('Locations \n')
+    #print(locations)
+    #print('\n Crops \n')
+    #print(crops)
 
-    countrySelection=[]
-    
-    
-    for loc in Locations['Country']:
-        print(loc)
-        if (loc == countryName):
-            countrySelection.append(Locations['Scientific name']) # Hasn't appended anything!
+    # Create list of pests in the chosen country
+    countrySelection=[]  
+    for index, row in locations.iterrows():              # Iterrows is a Genrator from Pandas
+        if row['Country'] == targetCountry:
+            countrySelection.append(row['Scientific name'])
+    print('countrySelection\n')
     print(countrySelection)
 
-    # do same for crops
-    # merge the countrySelection and cropSelection dfs based on common scientific names
-    
+
+    # Create list of pests of the chosen crop and then place in a DataFrame
+    rowList=[]
+    for index, row in crops.iterrows():             
+        if row['Crop'] == targetCrop:
+            rowList.append([row['Scientific'],row['Host Type']])
+    cropSelection = pd.DataFrame(rowList, columns=['Scientfic name','Host Type'])
+    print('\n cropSelection \n')
+    print(cropSelection)
+
+
+    # get the intersection of the countrySelection and cropSelection based on scientific names
+    # TO DO
+
+
     
     
 if __name__ == "__main__":
