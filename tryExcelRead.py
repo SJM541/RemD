@@ -37,7 +37,7 @@ def main():
     for index, row in crops.iterrows():             
         if row['Crop'] == targetCrop:
             rowList.append([row['Scientific'],row['Host Type']])
-    cropSelection = pd.DataFrame(rowList, columns=['Scientfic name','Host Type'])
+    cropSelection = pd.DataFrame(rowList, columns=['Scientific name','Host Type'])
     print('\n cropSelection \n')
     print(cropSelection)
 
@@ -45,8 +45,16 @@ def main():
     # get the intersection of the countrySelection and cropSelection based on scientific names
     # TO DO
 
+    pestList=[]
+    for pest in countrySelection: 
+        for index, row in cropSelection.iterrows():
+            if pest == row['Scientific name']:
+                #print("** %s \n" % pest)
+                pestList.append([row['Scientific name'],row['Host Type']])
+    pestsOfCropInCountry = pd.DataFrame(pestList, columns=['Scientific name','Host Type'])
+    print('Pests of %s in county %s \n' % (targetCrop, targetCountry))
+    print(pestsOfCropInCountry)
 
-    
-    
+
 if __name__ == "__main__":
     main()
