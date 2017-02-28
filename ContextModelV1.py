@@ -1,19 +1,12 @@
 
-# Use SoilGrids and APIXU APIs to retrieve soil and recent weather for a location
-#
-# SoilGrids: Info at https://rest.soilgrids.org/query.html
-# APIXU: info at https://www.apixu.com/doc/request.aspx
+# ContextModelV1
 
-# Written for Python 3.5
-
-# Stewart Marshall 20/01/2017
-# 02/2017 Tried aWhere for weather but unsuitable data model 
-# 02/2017 Added APIXU for weather, refactored and added work over date range 
 
 import sys
 import requests
 from pprint import pprint
 from datetime import datetime, timedelta
+import pandas as pd
 
 
 def retrieveSoilGridsData(latitude,longitude):
@@ -36,12 +29,25 @@ def retrieveSoilGridsData(latitude,longitude):
         print (e)
         sys.exit(1)
 
-    #print ("\n")
-    #print ("URL called: %s" % response.url)
-    #print ("HTTP Staus Code: %s " % response.status_code)
-    #print ("\n")
-    
     return(response.json())
+
+
+def soilData(latitude,longitude):
+    
+    # Get soil data
+    # Return just CEC at 0.1m for now
+    # 
+    # - will extend to return a DataFrame of all required soil data whan known
+
+    SoilGridsResponse = retrieveSoilGridsData(latitude,longitude)    
+    #pprint(SoilGridsResponse)
+
+    # Parse out CEC at 0.1m (sl2)
+    CEC_10 = SoilGridsResponse['properties']['CECSOL']['M']['sl2']
+    CEC_units = SoilGridsResponse['properties']['CECSOL']['units_of_measure']
+    # print (" \n CEC at 0.1m: %s %s" % (CEC_10, CEC_units))
+    return CEC_10
+    
 
 
 def apixuWeather(latitude,longitude,date):
@@ -62,32 +68,17 @@ def apixuWeather(latitude,longitude,date):
         print (e)
         sys.exit(1)
 
-    #print ("\n")
-    #print ("URL called: %s" % response.url)
-    #print ("HTTP Staus Code: %s " % response.status_code)
-    #print ("\n")
-
     return(response.json())
 
 
-def main():
 
-    # Irish Hill, Kintbury
-    latitude = "51.399205"
-    longitude = "-1.424458"
- 
-    # Get soil data 
-    SoilGridsResponse = retrieveSoilGridsData(latitude,longitude)    
-    #pprint(SoilGridsResponse)
+def weatherData(latitude,longitude,numDays):
 
-    # Parse out CEC at 0.1m (sl2)
-    CEC_10 = SoilGridsResponse['properties']['CECSOL']['M']['sl2']
-    units = SoilGridsResponse['properties']['CECSOL']['units_of_measure']
-    print (" \n CEC at 0.1m: %s %s" % (CEC_10, units))
+    # Get weather data for today and previous <numDays> days
+    # For now, returns just total precipitation
+    # - will extebnd to return DataFrame with temp etc.
 
-
-    # Get weather data    
-    dayCount = 5
+    dayCount = numDays
     dates = []
     now = datetime.now()
     
@@ -107,10 +98,76 @@ def main():
         # NB "forecastday" is a list so needs an index to resolve
         dayPrecip = apixuResponse['forecast']['forecastday'][0]["day"]['totalprecip_mm']
         responseDate = apixuResponse['forecast']['forecastday'][0]["date"]
-        print (" \n Precipitation for %s: %.1f mm" % (responseDate, dayPrecip))
+        # print (" \n Precipitation for %s: %.1f mm" % (responseDate, dayPrecip))
         totalPrecip = totalPrecip+dayPrecip
 
-    print(" \n Total precipitation for the period was %.1f mm" % (totalPrecip))
+    return totalPrecip
+
+
+
+
+def countryAndCropFilter(targetCountry,targetCrop,fileName):
+
+    locations = pd.read_excel(open(fileName,'rb'),sheetname='CPC_pest_location_model_data')
+    crops = pd.read_excel(open(fileName,'rb'),sheetname='CPC_crop-host_model_data')
+
+    # Create list of pests in the chosen country
+    countrySelection=[]  
+    for index, row in locations.iterrows():              # Iterrows is a Genrator from Pandas
+        if row['Country'] == targetCountry:
+            countrySelection.append(row['Scientific name'])
+    #print('countrySelection\n')
+    #print(countrySelection)
+
+
+    # Create list of pests of the chosen crop and then place in a DataFrame
+    rowList=[]
+    for index, row in crops.iterrows():             
+        if row['Crop'] == targetCrop:
+            rowList.append([row['Scientific'],row['Host Type']])
+    cropSelection = pd.DataFrame(rowList, columns=['Scientific name','Host Type'])
+    #print('\n cropSelection \n')
+    #print(cropSelection)
+
+
+    # get the intersection of the countrySelection and cropSelection based on scientific names
+    pestList=[]
+    for pest in countrySelection: 
+        for index, row in cropSelection.iterrows():
+            if pest == row['Scientific name']:
+                pestList.append([row['Scientific name'],row['Host Type']])
+    pestsOfCropInCountry = pd.DataFrame(pestList, columns=['Scientific name','Host Type'])
+    #print('Pests of %s in county %s \n' % (targetCrop, targetCountry))
+    #print(pestsOfCropInCountry)
+    return pestsOfCropInCountry
+
+
+def main():
+
+    # Setup
+    latitude = "51.399205"      # Irish Hill, Kintbury
+    longitude = "-1.424458"
+    weatherDays = 5             # Number of days over which to accumulate historical weather data
+    targetCountry='UK'
+    targetCrop = 'Cabbage'
+    #targetCountry='Kenya'
+    #targetCrop = 'Maize'
+    parametersFile = 'C:/Users/marshalls/Documents/SJM/RemoteDiagnostics/ContextModel/Remote_Diagnostics_Data.xlsx'
+    
+    # Get Soil Data
+    #CEC = soilData(latitude,longitude)
+    #print(' CEC at 10cm: %s \n' % CEC)
+    
+
+    # get WeatherData
+    #totalPrecip = weatherData(latitude,longitude,weatherDays)    
+    #print("\n Total precipitation for the period was %.1f mm" % (totalPrecip))
+
+
+    filteredPests = countryAndCropFilter(targetCountry, targetCrop, parametersFile)
+    print('\n Pests of %s in county %s \n' % (targetCrop, targetCountry))
+    print(filteredPests)
+
 
 
 if __name__ == "__main__":
