@@ -105,41 +105,49 @@ def weatherData(latitude,longitude,numDays):
 
 
 
-
 def countryAndCropFilter(targetCountry,targetCrop,fileName):
 
     locations = pd.read_excel(open(fileName,'rb'),sheetname='CPC_pest_location_model_data')
     crops = pd.read_excel(open(fileName,'rb'),sheetname='CPC_crop-host_model_data')
 
     # Create list of pests in the chosen country
-    countrySelection=[]  
+    countrySelectionList=[]  
     for index, row in locations.iterrows():              # Iterrows is a Genrator from Pandas
         if row['Country'] == targetCountry:
-            countrySelection.append(row['Scientific name'])
-    #print('countrySelection\n')
-    #print(countrySelection)
+            countrySelectionList.append(row['Scientific name'])
+    countrySelection = pd.DataFrame(countrySelectionList, columns=['Scientific name'])    
+    print('countrySelection\n')
+    print(countrySelection)
 
-
+ 
     # Create list of pests of the chosen crop and then place in a DataFrame
     rowList=[]
     for index, row in crops.iterrows():             
         if row['Crop'] == targetCrop:
-            rowList.append([row['Scientific'],row['Host Type']])
+            rowList.append([row['Scientific name'],row['Host Type']])
     cropSelection = pd.DataFrame(rowList, columns=['Scientific name','Host Type'])
-    #print('\n cropSelection \n')
-    #print(cropSelection)
+    print('\n cropSelection \n')
+    print(cropSelection)
 
-
-    # get the intersection of the countrySelection and cropSelection based on scientific names
-    pestList=[]
-    for pest in countrySelection: 
-        for index, row in cropSelection.iterrows():
-            if pest == row['Scientific name']:
-                pestList.append([row['Scientific name'],row['Host Type']])
-    pestsOfCropInCountry = pd.DataFrame(pestList, columns=['Scientific name','Host Type'])
-    #print('Pests of %s in county %s \n' % (targetCrop, targetCountry))
-    #print(pestsOfCropInCountry)
+    
+    # Innner join on cropSelection and countrySelection
+    pestsOfCropInCountry = pd.merge(cropSelection,countrySelection,on='Scientific name',how='inner')
+    
     return pestsOfCropInCountry
+
+
+def environmentalMultipliers(pests,fileName):
+
+    # Takes DataFrame of pests and location of lookup data
+    # Returns a DataFrame of pests and their environmental multipliers
+
+    multipliers = pd.read_excel(open(fileName,'rb'),sheetname='Game_model_data')
+
+    # Inner join of pests and multipliers   ***** THIS DOESN'T SEEM TO WORK ********
+    envMultipliers = pd.merge(multipliers,pests, on='Scientific name', how='inner')
+
+    return envMultipliers
+
 
 
 def main():
@@ -148,26 +156,28 @@ def main():
     latitude = "51.399205"      # Irish Hill, Kintbury
     longitude = "-1.424458"
     weatherDays = 5             # Number of days over which to accumulate historical weather data
-    targetCountry='UK'
-    targetCrop = 'Cabbage'
-    #targetCountry='Kenya'
-    #targetCrop = 'Maize'
+    #targetCountry='UK'
+    #targetCrop = 'Cabbage'
+    targetCountry='Kenya'
+    targetCrop = 'Maize'
     parametersFile = 'C:/Users/marshalls/Documents/SJM/RemoteDiagnostics/ContextModel/Remote_Diagnostics_Data.xlsx'
     
     # Get Soil Data
     #CEC = soilData(latitude,longitude)
     #print(' CEC at 10cm: %s \n' % CEC)
     
-
-    # get WeatherData
+    # Get WeatherData
     #totalPrecip = weatherData(latitude,longitude,weatherDays)    
     #print("\n Total precipitation for the period was %.1f mm" % (totalPrecip))
-
 
     filteredPests = countryAndCropFilter(targetCountry, targetCrop, parametersFile)
     print('\n Pests of %s in county %s \n' % (targetCrop, targetCountry))
     print(filteredPests)
 
+    # get the environmental multipliers for the pests of the ctop in the country
+    multipliers = environmentalMultipliers(filteredPests,parametersFile)
+    print('Multipliers in filtered list \n')
+    print(multipliers)
 
 
 if __name__ == "__main__":
