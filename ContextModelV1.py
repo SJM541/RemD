@@ -37,7 +37,7 @@ def soilData(latitude,longitude):
     # Get soil data
     # Return just CEC at 0.1m for now
     # 
-    # - will extend to return a DataFrame of all required soil data whan known
+    # - will extend to return a DataFrame of all required soil data when known
 
     SoilGridsResponse = retrieveSoilGridsData(latitude,longitude)    
     #pprint(SoilGridsResponse)
@@ -75,8 +75,7 @@ def apixuWeather(latitude,longitude,date):
 def weatherData(latitude,longitude,numDays):
 
     # Get weather data for today and previous <numDays> days
-    # For now, returns just total precipitation
-    # - will extebnd to return DataFrame with temp etc.
+    # For now, returns total precipitation and wet days, as a Dictionary
 
     dayCount = numDays
     dates = []
@@ -89,6 +88,7 @@ def weatherData(latitude,longitude,numDays):
         dayCount = dayCount - 1
 
     totalPrecip = 0.0
+    wetDays = 0
     
     for date in dates:
         apixuResponse = apixuWeather(latitude, longitude, date)
@@ -98,10 +98,35 @@ def weatherData(latitude,longitude,numDays):
         # NB "forecastday" is a list so needs an index to resolve
         dayPrecip = apixuResponse['forecast']['forecastday'][0]["day"]['totalprecip_mm']
         responseDate = apixuResponse['forecast']['forecastday'][0]["date"]
-        # print (" \n Precipitation for %s: %.1f mm" % (responseDate, dayPrecip))
+        #print (" \n Precipitation for %s: %.1f mm" % (responseDate, dayPrecip))
+        if dayPrecip > 0.0:
+            wetDays = wetDays+1
         totalPrecip = totalPrecip+dayPrecip
 
-    return totalPrecip
+    weatherSummary = {'wetDays':wetDays, 'totalPrecip':totalPrecip}
+    #print(weatherSummary)
+
+    return weatherSummary
+
+
+def assessWeather(summaryData):
+
+    # Takes summary weather data (for now just totalPrecip and wetDays)
+    # and returns assessment of wet, dry, hot and humid
+    # as a Dictionary of Boolean values
+
+    wetPrecipThreshold = 1.0    # These thresholds need careful consideration!
+    wetDaysThreshold = 5
+
+    isWet = False
+    isDry = False
+    isHot = False
+    isHumid = False
+
+    if (summaryData['totalPrecip'] > wetPrecipThreshold)and(summaryData['wetDays'] > wetDaysThreshold):
+       isWet = True
+
+    return ({'wet': isWet, 'dry': isDry, 'hot': isHot, 'humid': isHumid})
 
 
 
@@ -119,7 +144,6 @@ def countryAndCropFilter(targetCountry,targetCrop,fileName):
     print('countrySelection\n')
     print(countrySelection)
 
- 
     # Create list of pests of the chosen crop and then place in a DataFrame
     rowList=[]
     for index, row in crops.iterrows():             
@@ -129,7 +153,6 @@ def countryAndCropFilter(targetCountry,targetCrop,fileName):
     print('\n cropSelection \n')
     print(cropSelection)
 
-    
     # Innner join on cropSelection and countrySelection
     pestsOfCropInCountry = pd.merge(cropSelection,countrySelection,on='Scientific name',how='inner')
     
@@ -152,7 +175,7 @@ def environmentalMultipliers(pests,crop,fileName):
     envMultipliers = pd.merge(pests,multipliers, on='Scientific name', how='inner')
 
     # Filter again for crop
-    envCropMultipliers = envMultipliers[(envMultipliers.Crop==crop)]
+    envCropMultipliers = envMultipliers[(envMultipliers.Crop == crop)]
     
     return envCropMultipliers
 
@@ -161,11 +184,9 @@ def environmentalMultipliers(pests,crop,fileName):
 def main():
 
     # Setup
-    latitude = "51.399205"      # Irish Hill, Kintbury
-    longitude = "-1.424458"
-    weatherDays = 5             # Number of days over which to accumulate historical weather data
-    #targetCountry='UK'
-    #targetCrop = 'Cabbage'
+    latitude = "-0.453718"      # Nyeri, Kenya
+    longitude = "36.951524"
+    weatherDays = 10            # Number of days over which to accumulate historical weather data
     targetCountry='Kenya'
     targetCrop = 'Maize'
     parametersFile = 'C:/Users/marshalls/Documents/SJM/RemoteDiagnostics/ContextModel/Remote_Diagnostics_Data.xlsx'
@@ -175,17 +196,23 @@ def main():
     #print(' CEC at 10cm: %s \n' % CEC)
     
     # Get WeatherData
-    #totalPrecip = weatherData(latitude,longitude,weatherDays)    
-    #print("\n Total precipitation for the period was %.1f mm" % (totalPrecip))
+    weatherSummary = weatherData(latitude,longitude,weatherDays)    
+    print("\n Total precipitation for the period was %.1f mm" % (weatherSummary['totalPrecip']))
+    print(" Number of wet days was %d" % (weatherSummary['wetDays']))
 
-    cropCountryPests = countryAndCropFilter(targetCountry, targetCrop, parametersFile)
-    print('\n Pests of %s in county %s \n' % (targetCrop, targetCountry))
-    print(cropCountryPests)
+    weatherFactors = assessWeather(weatherSummary)
+    print(weatherFactors)
+    
+    #cropCountryPests = countryAndCropFilter(targetCountry, targetCrop, parametersFile)
+    #print('\n Pests of %s in county %s \n' % (targetCrop, targetCountry))
+    #print(cropCountryPests)
 
     # get the environmental multipliers for the pests of the ctop in the country
-    multipliers = environmentalMultipliers(cropCountryPests,targetCrop,parametersFile)
-    print('Multipliers in filtered list \n')
-    print(multipliers)
+    #multipliers = environmentalMultipliers(cropCountryPests,targetCrop,parametersFile)
+    #print('Multipliers in filtered list \n')
+    #print(multipliers)
+
+
 
 
 if __name__ == "__main__":
