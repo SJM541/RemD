@@ -136,17 +136,25 @@ def countryAndCropFilter(targetCountry,targetCrop,fileName):
     return pestsOfCropInCountry
 
 
-def environmentalMultipliers(pests,fileName):
+def environmentalMultipliers(pests,crop,fileName):
 
     # Takes DataFrame of pests and location of lookup data
     # Returns a DataFrame of pests and their environmental multipliers
 
+    # NB Game_model_data table contains multiple entries for each pest organism
+    # because it is organised by crop and a pest may be of >1 crop
+    
     multipliers = pd.read_excel(open(fileName,'rb'),sheetname='Game_model_data')
 
-    # Inner join of pests and multipliers   ***** THIS DOESN'T SEEM TO WORK ********
-    envMultipliers = pd.merge(multipliers,pests, on='Scientific name', how='inner')
+    # Inner join of pests and multipliers
+    # This gives multipliers for pests of crop, in country, but with multiple entries
+    # - see "NB" above
+    envMultipliers = pd.merge(pests,multipliers, on='Scientific name', how='inner')
 
-    return envMultipliers
+    # Filter again for crop
+    envCropMultipliers = envMultipliers[(envMultipliers.Crop==crop)]
+    
+    return envCropMultipliers
 
 
 
@@ -170,12 +178,12 @@ def main():
     #totalPrecip = weatherData(latitude,longitude,weatherDays)    
     #print("\n Total precipitation for the period was %.1f mm" % (totalPrecip))
 
-    filteredPests = countryAndCropFilter(targetCountry, targetCrop, parametersFile)
+    cropCountryPests = countryAndCropFilter(targetCountry, targetCrop, parametersFile)
     print('\n Pests of %s in county %s \n' % (targetCrop, targetCountry))
-    print(filteredPests)
+    print(cropCountryPests)
 
     # get the environmental multipliers for the pests of the ctop in the country
-    multipliers = environmentalMultipliers(filteredPests,parametersFile)
+    multipliers = environmentalMultipliers(cropCountryPests,targetCrop,parametersFile)
     print('Multipliers in filtered list \n')
     print(multipliers)
 
