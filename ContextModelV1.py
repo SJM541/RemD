@@ -7,6 +7,9 @@
 #   Presence or absesnce in country acts as hard filter but would like to
 #   apply a factor instead of exclude.
 
+#   Does not take any account of Major or Minor pest staus - just is or is not
+#   a pest of the crop. Add in this factor.
+
 #   Tidy up naming - some are clumsey
 
 #   Currently only uses preciptation data to set score
@@ -162,7 +165,7 @@ def countryAndCropFilter(targetCountry,targetCrop,fileName):
 
     # Create list of pests in the chosen country
     countrySelectionList=[]  
-    for index, row in locations.iterrows():              # Iterrows is a Genrator from Pandas
+    for index, row in locations.iterrows():              # Iterrows is a Generator from Pandas
         if row['Country'] == targetCountry:
             countrySelectionList.append(row['Scientific name'])
     countrySelection = pd.DataFrame(countrySelectionList, columns=['Scientific name'])    
@@ -170,6 +173,7 @@ def countryAndCropFilter(targetCountry,targetCrop,fileName):
     #print(countrySelection)
 
     # Create list of pests of the chosen crop and then place in a DataFrame
+    # Include Host Type, for later use in scoring.
     rowList=[]
     for index, row in crops.iterrows():             
         if row['Crop'] == targetCrop:
