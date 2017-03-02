@@ -2,6 +2,17 @@
 # ContextModelV1
 
 
+# TO DO
+
+#   Presence or absesnce in country acts as hard filter but would like to
+#   apply a factor instead of exclude.
+
+#   Tidy up naming - some are clumsey
+
+#   Currently only uses preciptation data to set score
+#   Add in temperature and wind
+
+
 import sys
 import requests
 from pprint import pprint
@@ -102,7 +113,15 @@ def weatherData(latitude,longitude,numDays):
         if dayPrecip > 0.0:
             wetDays = wetDays+1
         totalPrecip = totalPrecip+dayPrecip
+        
+    # Force "Dry"
+    #wetDays = 0
+    #totalPrecip = 0.1
 
+    # Force "Wet"
+    #wetDays = 10
+    #totalPrecip = 50.0
+    
     weatherSummary = {'wetDays':wetDays, 'totalPrecip':totalPrecip}
     #print(weatherSummary)
 
@@ -112,21 +131,27 @@ def weatherData(latitude,longitude,numDays):
 def assessWeather(summaryData):
 
     # Takes summary weather data (for now just totalPrecip and wetDays)
-    # and returns assessment of wet, dry, hot and humid
+    # and returns assessment of wet, dry, hot and windy
     # as a Dictionary of Boolean values
 
-    wetPrecipThreshold = 1.0    # These thresholds need careful consideration!
-    wetDaysThreshold = 5
+    # These thresholds need careful consideration!
+    
+    wetPrecipThreshold = 1.0        # "Wet" if more than n mm rain    
+    wetDaysThreshold = 5            #   and more than n wet days
+    dryPrecipThreshold = 0.5        # "Dry" if less than n mm rain
+    dryDaysThreshold = 0            #   and less than n wet days 
 
     isWet = False
     isDry = False
     isHot = False
-    isHumid = False
+    isWindy = False
 
     if (summaryData['totalPrecip'] > wetPrecipThreshold)and(summaryData['wetDays'] > wetDaysThreshold):
        isWet = True
+    if (summaryData['totalPrecip'] < dryPrecipThreshold)and(summaryData['wetDays'] <= dryDaysThreshold):
+       isDry = True
 
-    return ({'wet': isWet, 'dry': isDry, 'hot': isHot, 'humid': isHumid})
+    return ({'wet': isWet, 'dry': isDry, 'hot': isHot, 'windy': isWindy})
 
 
 
@@ -141,8 +166,8 @@ def countryAndCropFilter(targetCountry,targetCrop,fileName):
         if row['Country'] == targetCountry:
             countrySelectionList.append(row['Scientific name'])
     countrySelection = pd.DataFrame(countrySelectionList, columns=['Scientific name'])    
-    print('countrySelection\n')
-    print(countrySelection)
+    #print('countrySelection\n')
+    #print(countrySelection)
 
     # Create list of pests of the chosen crop and then place in a DataFrame
     rowList=[]
@@ -150,8 +175,8 @@ def countryAndCropFilter(targetCountry,targetCrop,fileName):
         if row['Crop'] == targetCrop:
             rowList.append([row['Scientific name'],row['Host Type']])
     cropSelection = pd.DataFrame(rowList, columns=['Scientific name','Host Type'])
-    print('\n cropSelection \n')
-    print(cropSelection)
+    #print('\n cropSelection \n')
+    #print(cropSelection)
 
     # Innner join on cropSelection and countrySelection
     pestsOfCropInCountry = pd.merge(cropSelection,countrySelection,on='Scientific name',how='inner')
@@ -180,6 +205,38 @@ def environmentalMultipliers(pests,crop,fileName):
     return envCropMultipliers
 
 
+def applyModelFactors(multipliers, weather):
+
+    # Takes a DataFrame of pests with model scores and a Dict of weather attributes
+    # Returns DataFrame of pest species and overall scores
+
+    isWet = weather['wet']
+    isDry = weather['dry']
+    isHot = weather['hot']
+    isWindy = weather['windy']
+
+    #isWet = False
+    #isDry = True
+    #isHot = True
+    #isWindy = True
+
+    scoreDict = {}
+    for index, row in multipliers.iterrows():
+        score = 1.0
+        if isWet:
+            score = score * row['Mwet']
+        if isDry:
+            score = score * row['Mdry']
+        if isHot:
+            score = score * row['Mhot']
+        if isWindy:
+            score = score * row['Mwind']           
+        scoreDict[row['Scientific name']] = score
+    #print(scoreDict)
+    pestScores = pd.DataFrame.from_dict(data=scoreDict,orient='index')
+
+    return pestScores
+        
 
 def main():
 
@@ -197,22 +254,25 @@ def main():
     
     # Get WeatherData
     weatherSummary = weatherData(latitude,longitude,weatherDays)    
-    print("\n Total precipitation for the period was %.1f mm" % (weatherSummary['totalPrecip']))
-    print(" Number of wet days was %d" % (weatherSummary['wetDays']))
+    #print("\n Total precipitation for the period was %.1f mm" % (weatherSummary['totalPrecip']))
+    #print(" Number of wet days was %d" % (weatherSummary['wetDays']))
 
     weatherFactors = assessWeather(weatherSummary)
-    print(weatherFactors)
+    #print(weatherFactors)
     
-    #cropCountryPests = countryAndCropFilter(targetCountry, targetCrop, parametersFile)
+    cropCountryPests = countryAndCropFilter(targetCountry, targetCrop, parametersFile)
     #print('\n Pests of %s in county %s \n' % (targetCrop, targetCountry))
     #print(cropCountryPests)
 
-    # get the environmental multipliers for the pests of the ctop in the country
-    #multipliers = environmentalMultipliers(cropCountryPests,targetCrop,parametersFile)
+    # get the environmental multipliers for the pests of the crop in the country
+    multipliers = environmentalMultipliers(cropCountryPests,targetCrop,parametersFile)
     #print('Multipliers in filtered list \n')
     #print(multipliers)
 
-
+    # Apply factors for weather to generate a scored set of pest species
+    scoredPests = applyModelFactors(multipliers, weatherFactors)
+    print('Pests of the crop, in the country, scored for impact of weather \n')
+    print(scoredPests)
 
 
 if __name__ == "__main__":
