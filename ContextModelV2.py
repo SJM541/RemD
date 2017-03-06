@@ -158,34 +158,56 @@ def assessWeather(summaryData):
 
 
 
-def countryAndCropFilter(targetCountry,targetCrop,fileName):
+def scoreForCountry(locations,targetCountry):
 
-    locations = pd.read_excel(open(fileName,'rb'),sheetname='CPC_pest_location_model_data')
-    crops = pd.read_excel(open(fileName,'rb'),sheetname='CPC_crop-host_model_data')
 
+    inCountryScore = 1.5
+    notInCountryScore = 0.5
+
+    scoredPests = locations
+    
     # Create list of pests in the chosen country
-    countrySelectionList=[]  
-    for index, row in locations.iterrows():              # Iterrows is a Generator from Pandas
+    countryScoreList=[]  
+    for index, row in scoredPests.iterrows():              # Iterrows is a Generator from Pandas
         if row['Country'] == targetCountry:
-            countrySelectionList.append(row['Scientific name'])
-    countrySelection = pd.DataFrame(countrySelectionList, columns=['Scientific name'])    
-    #print('countrySelection\n')
-    #print(countrySelection)
+            countryScoreList.append(inCountryScore)
+        else:
+            countryScoreList.append(notInCountryScore)
+    scoredPests['Country Score'] = countryScoreList
+    #print(scoredPests)
+    return scoredPests
 
-    # Create list of pests of the chosen crop and then place in a DataFrame
-    # Include Host Type, for later use in scoring.
-    rowList=[]
+
+def scoreForCrop(pests,crops,targetCrop):
+    
+    majorCropScore = 1.5
+    minorCropScore = 1.2
+    notOnCropScore = 0.5
+    
+    cropScoreDict={}
     for index, row in crops.iterrows():             
         if row['Crop'] == targetCrop:
-            rowList.append([row['Scientific name'],row['Host Type']])
-    cropSelection = pd.DataFrame(rowList, columns=['Scientific name','Host Type'])
-    #print('\n cropSelection \n')
-    #print(cropSelection)
+            if(row['Host Type'] == 'Major'):
+                cropScoreDict[row['Scientific name']] = majorCropScore
+            elif(row['Host Type'] == 'Minor'):
+                cropScoreDict[row['Scientific name']] = minorCropScore
+        else:
+            cropScoreDict[row['Scientific name']] = notOnCropScore
+
+    print(cropScoreDict)
+
+    #cropScoreDF = pd.DataFrame.from_dict(data=cropScoreDict,orient='index')
+    #Below is more clumsey but provides column headings to use later in the merge
+    cropScoreDF = pd.DataFrame()
+    cropScoreDF['Scientific name'] = cropScoreDict.keys()
+    cropScoreDF['Crop Score'] = cropScoreDict.values()
+    print('\n crop score DF \n')
+    print(cropScoreDF)
 
     # Innner join on cropSelection and countrySelection
-    pestsOfCropInCountry = pd.merge(cropSelection,countrySelection,on='Scientific name',how='inner')
+    cropAndCountryScores = pd.merge(cropScoreDF,pests,on='Scientific name',how='inner')
     
-    return pestsOfCropInCountry
+    return cropAndCountryScores
 
 
 def environmentalMultipliers(pests,crop,fileName):
@@ -249,34 +271,42 @@ def main():
     longitude = "36.951524"
     weatherDays = 10            # Number of days over which to accumulate historical weather data
     targetCountry='Kenya'
-    targetCrop = 'Maize'
-    parametersFile = 'C:/Users/marshalls/Documents/SJM/RemoteDiagnostics/ContextModel/Remote_Diagnostics_Data.xlsx'
+    targetCrop = 'Cabbage'
+    parametersFileName = 'C:/Users/marshalls/Documents/SJM/RemoteDiagnostics/ContextModel/Remote_Diagnostics_Data.xlsx'
     
     # Get Soil Data
     #CEC = soilData(latitude,longitude)
     #print(' CEC at 10cm: %s \n' % CEC)
     
     # Get WeatherData
-    weatherSummary = weatherData(latitude,longitude,weatherDays)    
+    #weatherSummary = weatherData(latitude,longitude,weatherDays)    
     #print("\n Total precipitation for the period was %.1f mm" % (weatherSummary['totalPrecip']))
     #print(" Number of wet days was %d" % (weatherSummary['wetDays']))
 
-    weatherFactors = assessWeather(weatherSummary)
+    #weatherFactors = assessWeather(weatherSummary)
     #print(weatherFactors)
     
-    cropCountryPests = countryAndCropFilter(targetCountry, targetCrop, parametersFile)
-    #print('\n Pests of %s in county %s \n' % (targetCrop, targetCountry))
-    #print(cropCountryPests)
+    # DataFrames to hold location and crop data
+    locations = pd.read_excel(open(parametersFileName,'rb'),sheetname='CPC_pest_location_model_data')
+    crops = pd.read_excel(open(parametersFileName,'rb'),sheetname='CPC_crop-host_model_data')
+
+
+    countryScoredPests = scoreForCountry(locations,targetCountry)
+    #print(countryScoredPests)
+
+    countryCropScoredPests = scoreForCrop(countryScoredPests,crops,targetCrop)
+    print(countryCropScoredPests)
+
 
     # get the environmental multipliers for the pests of the crop in the country
-    multipliers = environmentalMultipliers(cropCountryPests,targetCrop,parametersFile)
+    #multipliers = environmentalMultipliers(cropCountryPests,targetCrop,parametersFile)
     #print('Multipliers in filtered list \n')
     #print(multipliers)
 
     # Apply factors for weather to generate a scored set of pest species
-    scoredPests = applyModelFactors(multipliers, weatherFactors)
-    print('Pests of the crop, in the country, scored for impact of weather \n')
-    print(scoredPests)
+    #scoredPests = applyModelFactors(multipliers, weatherFactors)
+    #print('Pests of the crop, in the country, scored for impact of weather \n')
+    #print(scoredPests)
 
 
 if __name__ == "__main__":
